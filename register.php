@@ -24,9 +24,9 @@ if (isset($_POST['register'])) {
         if (mysqli_num_rows($result_check) > 0) {
             $error = "Username sudah digunakan, pilih username lain!";
         } else {
-            // Masukkan user baru dengan role otomatis 'mahasiswa'
+            // Masukkan user baru dengan role otomatis 'mahasiswa' dan status langsung aktif
             // Catatan: Untuk tugas kuliah dasar, password disimpan teks biasa dulu sesuai dummy awal.
-            $query = "INSERT INTO users (username, password, role) VALUES ('$username', '$password', 'mahasiswa')";
+            $query = "INSERT INTO users (username, password, role, status, last_active) VALUES ('$username', '$password', 'mahasiswa', 'aktif', NOW())";
             
             if (mysqli_query($conn, $query)) {
                 $success = "Registrasi berhasil! Silakan login.";

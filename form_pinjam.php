@@ -1,7 +1,10 @@
 <?php
-include 'config/db.php';
 session_start();
 
+// 1. KONEKSI DATABASE LANGSUNG DI SINI
+include 'config/db.php';
+
+// Proteksi halaman: Pastikan user sudah login sebagai mahasiswa
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'mahasiswa') {
     header("Location: index.php");
     exit;
@@ -9,50 +12,62 @@ if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'mahasiswa') {
 
 $id_user = $_SESSION['id_user'];
 
-if (isset($_POST['ajukan_pinjam'])) {
-    $id_alat = mysqli_real_escape_string($conn, $_POST['id_alat']);
-    $jumlah = mysqli_real_escape_string($conn, $_POST['jumlah']);
-    $tgl_pinjam = date('Y-m-d');
-    $tgl_kembali = mysqli_real_escape_string($conn, $_POST['tgl_kembali']);
+// 2. PROSES SIMPAN DATA FORMULIR
+if (isset($_POST['ajukan_peminjaman'])) {
+    $id_alat      = mysqli_real_escape_string($conn, $_POST['id_alat']);
+    $jumlah       = mysqli_real_escape_string($conn, $_POST['jumlah']);
+    $tgl_pinjam   = date('Y-m-d'); // Otomatis tanggal hari ini
+    $jam_pinjam   = date('H:i'); // Jam saat form disubmit
+    $tgl_kembali  = mysqli_real_escape_string($conn, $_POST['tgl_kembali']);
+    $jam_kembali  = mysqli_real_escape_string($conn, $_POST['jam_kembali']);
 
-    // =========================================================
-    // IMPLEMENTASI MATERI: DATABASE TRANSACTION (START)
-    // =========================================================
-    mysqli_begin_transaction($conn);
+    // ======== VALIDASI TANGGAL & JAM PENGEMBALIAN ========
+    // Gabungkan tanggal dan jam menjadi datetime untuk perbandingan
+    $datetime_pinjam   = strtotime($tgl_pinjam . ' ' . $jam_pinjam);
+    $datetime_kembali  = strtotime($tgl_kembali . ' ' . $jam_kembali);
+    
 
-    try {
-        // Cek stok dengan fitur Row Locking (FOR UPDATE) demi keamanan data terdistribusi
-        $cek_stok = mysqli_query($conn, "SELECT stok FROM inventaris WHERE id_alat = '$id_alat' FOR UPDATE");
-        $data_stok = mysqli_fetch_assoc($cek_stok);
+    // Validasi: Pengembalian tidak boleh sebelum waktu peminjaman
+    if ($datetime_kembali < $datetime_pinjam) {
+        echo "<script>alert('TANGGAL & JAM TIDAK VALID!\\n\\nAnda meminjam pada: " . date('d/m/Y H:i', $datetime_pinjam) . "\\n\\nTanggal pengembalian harus sama atau SETELAH waktu peminjaman.\\n\\nSilakan isi ulang data dengan benar.');</script>";
+    } else {
+        mysqli_begin_transaction($conn);
 
-        if ($jumlah > $data_stok['stok']) {
-            throw new Exception("Gagal mengajukan! Jumlah melebihi sisa stok laboratorium.");
-        } elseif ($jumlah <= 0) {
-            throw new Exception("Gagal mengajukan! Jumlah pinjam minimal 1 pcs.");
+        try {
+            // Cek stok alat terlebih dahulu
+            $cek_stok = mysqli_query($conn, "SELECT stok FROM inventaris WHERE id_alat = '$id_alat' FOR UPDATE");
+            if (!$cek_stok) {
+                throw new Exception("Error cek stok: " . mysqli_error($conn));
+            }
+            
+            $data_stok = mysqli_fetch_assoc($cek_stok);
+
+            // Validasi: Jumlah tidak boleh melebihi stok dan harus positif
+            if ($jumlah < 1 || !is_numeric($jumlah)) {
+                throw new Exception("Jumlah peminjaman harus minimal 1 unit!");
+            }
+
+            if ($data_stok['stok'] < $jumlah) {
+                echo "<script>alert('Stok alat tidak mencukupi! Tersedia: " . $data_stok['stok'] . " pcs, Diminta: " . $jumlah . " pcs');</script>";
+            } else {
+                // Memasukkan data sesuai urutan kolom tabel peminjaman kamu
+                $query = "INSERT INTO peminjaman (id_user, id_alat, jumlah, tgl_pinjam, jam_kembali, tgl_kembali, status) 
+                          VALUES ('$id_user', '$id_alat', '$jumlah', '$tgl_pinjam', '$jam_kembali', '$tgl_kembali', 'menunggu')";
+                
+                if (mysqli_query($conn, $query)) {
+                    // Stok akan dikurangi otomatis saat admin menyetujui peminjaman di kelola.php
+                    mysqli_commit($conn);
+                    echo "<script>alert('Peminjaman berhasil diajukan! Menunggu persetujuan admin.'); window.location='riwayat.php';</script>";
+                } else {
+                    throw new Exception("Gagal query INSERT: " . mysqli_error($conn));
+                }
+            }
+        } catch (Exception $e) {
+            mysqli_rollback($conn);
+            echo "<script>alert('Terjadi kesalahan: " . $e->getMessage() . "');</script>";
         }
-
-        // Jalankan Query Insert Data Transaksi
-        $query = "INSERT INTO peminjaman (id_user, id_alat, jumlah, tgl_pinjam, tgl_kembali, status) 
-                  VALUES ('$id_user', '$id_alat', '$jumlah', '$tgl_pinjam', '$tgl_kembali', 'menunggu')";
-        
-        if (!mysqli_query($conn, $query)) {
-            throw new Exception("Gagal menyimpan data transaksi ke database.");
-        }
-
-        // Jika semua operasi sukses, simpan secara permanen
-        mysqli_commit($conn);
-        $success = "Pengajuan berhasil dikirim via Secure Database Transaction!";
-    } catch (Exception $e) {
-        // Jika ada kesalahan/stok habis, batalkan semua perubahan data
-        mysqli_rollback($conn);
-        $error = $e->getMessage();
     }
-    // =========================================================
-    // IMPLEMENTASI MATERI: DATABASE TRANSACTION (END)
-    // =========================================================
-}
-
-$katalog = mysqli_query($conn, "SELECT * FROM inventaris");
+    }
 ?>
 
 <!DOCTYPE html>
@@ -60,7 +75,7 @@ $katalog = mysqli_query($conn, "SELECT * FROM inventaris");
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Formulir Peminjaman Alat - LabTrack</title>
+    <title>Formulir Peminjaman - LabTrack</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="assets/css/style.css" rel="stylesheet">
 </head>
@@ -73,43 +88,143 @@ $katalog = mysqli_query($conn, "SELECT * FROM inventaris");
     </div>
 </nav>
 
-<div class="container my-5" style="max-width: 600px;">
+<div class="container my-5">
     <div class="card border-0 shadow-sm p-4 bg-white rounded-3">
-        <h4 class="fw-bold text-primary mb-2">Formulir Peminjaman</h4>
-        <p class="text-muted small">Silakan masukkan jenis alat lab dan tanggal pengembalian dengan benar.</p>
-        <hr>
-        
-        <?php if(isset($error)) echo "<div class='alert alert-danger py-2 small'>$error</div>"; ?>
-        <?php if(isset($success)) echo "<div class='alert alert-success py-2 small'>$success</div>"; ?>
+        <h4 class="fw-bold text-dark mb-2">Formulir Peminjaman</h4>
+        <p class="text-muted small mb-4">Silakan masukkan jenis alat lab dan tanggal pengembalian dengan benar.</p>
 
         <form action="" method="POST">
+            
             <div class="mb-3">
-                <label for="id_alat" class="form-label small fw-semibold text-secondary">Pilih Alat Praktikum</label>
-                <select class="form-select" id="id_alat" name="id_alat" required>
-                    <option value="" selected disabled>-- Pilih Alat --</option>
-                    <?php while($row = mysqli_fetch_assoc($katalog)): ?>
-                        <option value="<?php echo $row['id_alat']; ?>" <?php echo ($row['stok'] <= 0) ? 'disabled class="text-danger"' : ''; ?>>
-                            <?php echo $row['nama_alat']; ?> <?php echo ($row['stok'] <= 0) ? '(Stok Habis)' : '(Sisa: ' . $row['stok'] . ')'; ?>
-                        </option>
-                    <?php endwhile; ?>
+                <label class="form-label fw-semibold">Pilih Alat Praktikum</label>
+                <select name="id_alat" id="id_alat" class="form-select form-select-lg" required>
+                    <option value="">-- Pilih Alat --</option>
+                    <?php
+                    $ambil_alat = mysqli_query($conn, "SELECT * FROM inventaris WHERE stok > 0");
+                    if (!$ambil_alat) {
+                        echo "<option value=''>Error memuat data: " . mysqli_error($conn) . "</option>";
+                    } elseif (mysqli_num_rows($ambil_alat) === 0) {
+                        echo "<option value=''>Tidak ada alat tersedia</option>";
+                    } else {
+                        while($alat = mysqli_fetch_assoc($ambil_alat)) {
+                            echo "<option value='".$alat['id_alat']."' data-stok='".$alat['stok']."'>".$alat['nama_alat']." (Stok: ".$alat['stok'].")</option>";
+                        }
+                    }
+                    ?>
                 </select>
             </div>
-            
+
             <div class="mb-3">
-                <label for="jumlah" class="form-label small fw-semibold text-secondary">Jumlah yang Dipinjam</label>
-                <input type="number" class="form-control" id="jumlah" name="jumlah" min="1" placeholder="Contoh: 2" required>
+                <label class="form-label fw-semibold">Jumlah yang Dipinjam</label>
+                <input type="number" name="jumlah" id="jumlah" class="form-control form-control-lg" placeholder="Contoh: 2" min="1" required>
+                <small class="text-muted d-block mt-2" id="maxStok">Pilih alat terlebih dahulu</small>
             </div>
-            
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Tanggal Pengembalian</label>
+                <input type="date" name="tgl_kembali" id="tgl_kembali" class="form-control form-control-lg" required>
+                <small class="text-muted d-block mt-2">Tanggal pengembalian minimal harus hari ini atau hari berikutnya</small>
+            </div>
+
             <div class="mb-4">
-                <label for="tgl_kembali" class="form-label small fw-semibold text-secondary">Tanggal Pengembalian</label>
-                <input type="date" class="form-control" id="tgl_kembali" name="tgl_kembali" min="<?php echo date('Y-m-d'); ?>" required>
+                <label class="form-label fw-semibold">Jam Batas Pengembalian</label>
+                <input type="time" name="jam_kembali" id="jam_kembali" class="form-control form-control-lg" required>
+                <small class="text-muted d-block mt-2">Jika pengembalian hari ini, jam harus sama atau lebih besar dari jam sekarang</small>
             </div>
-            
-            <button type="submit" name="ajukan_pinjam" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">Kirim Formulir Pengajuan</button>
+
+            <button type="submit" name="ajukan_peminjaman" class="btn btn-primary btn-lg w-100 fw-bold">
+                Kirim Formulir Pengajuan
+            </button>
+
         </form>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Data stok untuk setiap alat
+    const selectAlat = document.getElementById('id_alat');
+    const inputJumlah = document.getElementById('jumlah');
+    const textMaxStok = document.getElementById('maxStok');
+
+    // Update max dan info stok saat pilihan alat berubah
+    selectAlat.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const stok = selectedOption.getAttribute('data-stok');
+
+        if (stok) {
+            inputJumlah.setAttribute('max', stok);
+            inputJumlah.value = ''; // Reset input
+            textMaxStok.textContent = 'Maksimal dapat dipinjam: ' + stok + ' pcs';
+        } else {
+            inputJumlah.removeAttribute('max');
+            inputJumlah.value = '';
+            textMaxStok.textContent = 'Pilih alat terlebih dahulu';
+        }
+    });
+
+    // Set minimum date = hari ini
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('tgl_kembali').setAttribute('min', today);
+
+    // Set default jam = jam sekarang
+    const now = new Date();
+    const currentTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    document.getElementById('jam_kembali').value = currentTime;
+
+    // Validasi saat user submit form
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const idAlat = document.getElementById('id_alat').value;
+        const jumlah = parseInt(inputJumlah.value);
+        const tglKembali = document.getElementById('tgl_kembali').value;
+        const jamKembali = document.getElementById('jam_kembali').value;
+        const selectedOption = selectAlat.options[selectAlat.selectedIndex];
+        const maxStok = parseInt(selectedOption.getAttribute('data-stok'));
+
+        // Validasi alat dipilih
+        if (!idAlat) {
+            e.preventDefault();
+            alert('Silakan pilih alat terlebih dahulu!');
+            return false;
+        }
+
+        // Validasi jumlah
+        if (!jumlah || jumlah < 1) {
+            e.preventDefault();
+            alert('Silakan isi jumlah peminjaman (minimal 1)!');
+            return false;
+        }
+
+        // Validasi jumlah tidak lebih dari stok
+        if (jumlah > maxStok) {
+            e.preventDefault();
+            alert('Jumlah peminjaman tidak boleh lebih dari stok tersedia! Maksimal: ' + maxStok + ' pcs');
+            return false;
+        }
+
+        if (!tglKembali || !jamKembali) {
+            e.preventDefault();
+            alert('Silakan isi tanggal dan jam pengembalian!');
+            return false;
+        }
+
+        // Cek apakah tanggal pengembalian tidak lebih awal dari hari ini
+        if (tglKembali < today) {
+            e.preventDefault();
+            alert('Tanggal pengembalian tidak boleh di hari sebelumnya!');
+            return false;
+        }
+
+        // Jika tanggal sama dengan hari ini, jam harus >= jam sekarang
+        if (tglKembali === today && jamKembali < currentTime) {
+            e.preventDefault();
+            alert('Jika pengembalian hari ini, jam harus sama atau LEBIH BESAR dari jam sekarang (' + currentTime + ')');
+            return false;
+        }
+
+        // Jika semua validasi lolos
+        return true;
+    });
+</script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 <?php
+include 'config/db.php'; // Ditambahkan agar bisa mengecek database secara real-time
 session_start();
 // Proteksi halaman: jika belum login, tendang ke index.php
 if (!isset($_SESSION['username'])) {
@@ -32,7 +33,7 @@ if (!isset($_SESSION['username'])) {
 </nav>
 
 <div class="container my-5">
-    <div class="row mb-5">
+    <div class="row mb-4">
         <div class="col-12">
             <div class="p-4 rounded shadow-sm welcome-banner bg-light">
                 <h2 class="fw-bold text-dark m-0">Selamat Datang di LabTrack Panel</h2>
@@ -41,6 +42,58 @@ if (!isset($_SESSION['username'])) {
         </div>
     </div>
 
+    <?php 
+    if ($_SESSION['role'] == 'mahasiswa') {
+        date_default_timezone_set('Asia/Jakarta');
+        $id_user_login = $_SESSION['id_user'] ?? 0;
+
+        // Mengecek melalui view laporan peminjaman
+        $cek_terlambat_user = mysqli_query($conn, "SELECT tgl_kembali, jam_kembali, nama_alat 
+                                                   FROM view_laporan_peminjaman 
+                                                   WHERE id_user = '$id_user_login' AND status = 'dipinjam'");
+
+        $sudah_lewat_tenggat = false;
+        $list_alat_terlambat = [];
+
+        if ($cek_terlambat_user && mysqli_num_rows($cek_terlambat_user) > 0) {
+            $waktu_sekarang_ts = time();
+            while ($item = mysqli_fetch_assoc($cek_terlambat_user)) {
+                $jam_format = !empty($item['jam_kembali']) ? $item['jam_kembali'] : '00:00:00';
+                $waktu_kembali_ts = strtotime($item['tgl_kembali'] . ' ' . $jam_format);
+                
+                if ($waktu_sekarang_ts > $waktu_kembali_ts) {
+                    $sudah_lewat_tenggat = true;
+                    $list_alat_terlambat[] = $item['nama_alat'];
+                }
+            }
+        }
+
+        if ($sudah_lewat_tenggat) :
+        ?>
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="alert alert-danger shadow-sm border-2 rounded-3" role="alert">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3 fs-3">⚠️</div>
+                        <div>
+                            <h5 class="alert-heading fw-bold mb-1 text-danger">PERINGATAN: Batas Waktu Pengembalian Habis!</h5>
+                            <p class="mb-1 text-dark small">
+                                Kamu terdeteksi belum mengembalikan alat lab berikut: 
+                                <strong><?php echo implode(', ', array_unique($list_alat_terlambat)); ?></strong>.
+                            </p>
+                            <hr class="my-2">
+                            <p class="mb-0 text-muted extra-small" style="font-size: 0.8rem;">
+                                *Harap segera kembalikan alat ke asisten laboratorium untuk menghindari sanksi pembekuan hak pinjam alat praktikum berikutnya.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php 
+        endif;
+    } 
+    ?>
     <?php if ($_SESSION['role'] == 'admin'): ?>
         <h5 class="fw-bold text-dark text-uppercase mb-3 tracking-wide">Akses Kontrol Admin</h5>
         <div class="row g-4">
@@ -79,6 +132,7 @@ if (!isset($_SESSION['username'])) {
                     </div>
                 </div>
             </div>
+        </div>
 
     <?php else: ?>
         <h5 class="fw-bold text-dark text-uppercase mb-3 tracking-wide">Layanan Mahasiswa</h5>
@@ -115,6 +169,17 @@ if (!isset($_SESSION['username'])) {
                             <p class="card-text text-muted small">Pantau status validasi pengajuan peminjaman Anda (Menunggu, Dipinjam, Selesai, atau Terlambat).</p>
                         </div>
                         <a href="riwayat.php" class="btn btn-secondary btn-sm fw-semibold w-100 mt-3">Cek Riwayat</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 shadow-sm card-menu">
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <div>
+                            <h5 class="card-title fw-bold text-dark">Kelola Akun Saya</h5>
+                            <p class="card-text text-muted small">Nonaktifkan atau aktifkan kembali akun Anda sendiri.</p>
+                        </div>
+                        <a href="user_toggle_status.php" class="btn btn-outline-dark btn-sm fw-semibold w-100 mt-3">Kelola Akun</a>
                     </div>
                 </div>
             </div>

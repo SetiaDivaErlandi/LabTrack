@@ -19,6 +19,42 @@ if (isset($_POST['tambah_alat'])) {
     }
 }
 
+// Proses Update Alat
+if (isset($_POST['update_alat'])) {
+    $id_alat = mysqli_real_escape_string($conn, $_POST['id_alat']);
+    $nama_alat = mysqli_real_escape_string($conn, $_POST['nama_alat']);
+    $stok = mysqli_real_escape_string($conn, $_POST['stok']);
+    $deskripsi = mysqli_real_escape_string($conn, $_POST['deskripsi']);
+
+    $q = "UPDATE inventaris SET nama_alat = '$nama_alat', stok = '$stok', deskripsi = '$deskripsi' WHERE id_alat = '$id_alat'";
+    if (mysqli_query($conn, $q)) {
+        $success = "Data alat berhasil diperbarui.";
+    } else {
+        $error = "Gagal memperbarui data: " . mysqli_error($conn);
+    }
+}
+
+// Proses Hapus Alat
+if (isset($_GET['hapus'])) {
+    $id_hapus = mysqli_real_escape_string($conn, $_GET['hapus']);
+    $q = "DELETE FROM inventaris WHERE id_alat = '$id_hapus'";
+    if (mysqli_query($conn, $q)) {
+        $success = "Alat berhasil dihapus dari inventaris.";
+    } else {
+        $error = "Gagal menghapus alat: " . mysqli_error($conn);
+    }
+}
+
+// Jika sedang mengedit, ambil data alat yang akan diedit
+$edit_item = null;
+if (isset($_GET['edit'])) {
+    $id_edit = mysqli_real_escape_string($conn, $_GET['edit']);
+    $res = mysqli_query($conn, "SELECT * FROM inventaris WHERE id_alat = '$id_edit'");
+    if ($res && mysqli_num_rows($res) == 1) {
+        $edit_item = mysqli_fetch_assoc($res);
+    }
+}
+
 // Ambil data untuk ditampilkan ke tabel
 $katalog = mysqli_query($conn, "SELECT * FROM inventaris");
 ?>
@@ -45,6 +81,29 @@ $katalog = mysqli_query($conn, "SELECT * FROM inventaris");
     <div class="row">
         <div class="col-md-4 mb-4">
             <div class="card border-0 shadow-sm p-4 bg-white rounded-3">
+                <?php if ($edit_item): ?>
+                <h5 class="fw-bold text-primary mb-3">Edit Alat</h5>
+                <hr>
+                <form action="" method="POST">
+                    <input type="hidden" name="id_alat" value="<?php echo $edit_item['id_alat']; ?>">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Nama Alat Lab</label>
+                        <input type="text" class="form-control" name="nama_alat" value="<?php echo htmlspecialchars($edit_item['nama_alat']); ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Jumlah Stok</label>
+                        <input type="number" class="form-control" name="stok" min="0" value="<?php echo $edit_item['stok']; ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Deskripsi / Spesifikasi</label>
+                        <textarea class="form-control" name="deskripsi" rows="3" required><?php echo htmlspecialchars($edit_item['deskripsi']); ?></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" name="update_alat" class="btn btn-success w-100 fw-bold">Simpan Perubahan</button>
+                        <a href="kelola_alat.php" class="btn btn-outline-secondary w-100">Batal</a>
+                    </div>
+                </form>
+                <?php else: ?>
                 <h5 class="fw-bold text-primary mb-3">Tambah Alat Baru</h5>
                 <hr>
                 <form action="" method="POST">
@@ -62,6 +121,7 @@ $katalog = mysqli_query($conn, "SELECT * FROM inventaris");
                     </div>
                     <button type="submit" name="tambah_alat" class="btn btn-primary w-100 fw-bold">Simpan ke Gudang</button>
                 </form>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -90,6 +150,12 @@ $katalog = mysqli_query($conn, "SELECT * FROM inventaris");
                                     </span>
                                 </td>
                                 <td class="small text-muted"><?php echo $row['deskripsi']; ?></td>
+                            </tr>
+                            <tr>
+                                <td colspan="3" class="text-end">
+                                    <a href="kelola_alat.php?edit=<?php echo $row['id_alat']; ?>" class="btn btn-sm btn-outline-primary me-2">Edit</a>
+                                    <a href="kelola_alat.php?hapus=<?php echo $row['id_alat']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Hapus alat \"<?php echo addslashes($row['nama_alat']); ?>\"?')">Hapus</a>
+                                </td>
                             </tr>
                             <?php endwhile; ?>
                         </tbody>

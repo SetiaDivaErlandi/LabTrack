@@ -17,14 +17,21 @@ if (isset($_POST['login'])) {
 
     if (mysqli_num_rows($result) === 1) {
         $row = mysqli_fetch_assoc($result);
-        
-        // Menyimpan data login ke session browser
-        $_SESSION['id_user']  = $row['id_user'];
-        $_SESSION['username'] = $row['username'];
-        $_SESSION['role']     = $row['role'];
-        
-        header("Location: dashboard.php");
-        exit;
+        // Cek status akun (aktif/nonaktif)
+        if (isset($row['status']) && $row['status'] !== 'aktif') {
+            $error = "Akun Anda tidak aktif. <a href='request_reactivate.php' class='text-warning fw-semibold'>Minta aktivasi di sini</a> atau hubungi admin laboratorium.";
+        } else {
+            // Menyimpan data login ke session browser
+            $_SESSION['id_user']  = $row['id_user'];
+            $_SESSION['username'] = $row['username'];
+            $_SESSION['role']     = $row['role'];
+
+            // Update last_active agar auto-deactivate bekerja
+            mysqli_query($conn, "UPDATE users SET last_active = NOW() WHERE id_user = '".$row['id_user']."'");
+
+            header("Location: dashboard.php");
+            exit;
+        }
     } else {
         $error = "Username atau Password Anda salah!";
     }
@@ -65,7 +72,8 @@ if (isset($_POST['login'])) {
         </div>
         <button type="submit" name="login" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">Masuk Sistem</button>
         <div class="text-center mt-3">
-            <p class="small text-muted mb-0">Belum punya akun? <a href="register.php" class="text-success fw-semibold text-decoration-none">Registrasi Mahasiswa</a></p>
+            <p class="small text-muted mb-2">Belum punya akun? <a href="register.php" class="text-success fw-semibold text-decoration-none">Registrasi Mahasiswa</a></p>
+            <p class="small text-muted mb-0">Lupa password? <a href="forgot_password.php" class="text-warning fw-semibold text-decoration-none">Reset di sini</a></p>
         </div>
     </form>
 </div>
