@@ -1,6 +1,9 @@
 <?php
 session_start();
 
+// Mengatur zona waktu ke Waktu Indonesia Barat (WIB) agar jam sesuai dengan laptop
+date_default_timezone_set('Asia/Jakarta'); 
+
 include 'config/db.php';
 
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'mahasiswa') {
@@ -14,7 +17,7 @@ if (isset($_POST['ajukan_peminjaman'])) {
     $id_alat      = mysqli_real_escape_string($conn, $_POST['id_alat']);
     $jumlah       = mysqli_real_escape_string($conn, $_POST['jumlah']);
     $tgl_pinjam   = date('Y-m-d');
-    $jam_pinjam   = date('H:i'); 
+    $jam_pinjam   = date('H:i:s'); // Jam akan otomatis mengambil waktu WIB saat ini
     $tgl_kembali  = mysqli_real_escape_string($conn, $_POST['tgl_kembali']);
     $jam_kembali  = mysqli_real_escape_string($conn, $_POST['jam_kembali']);
     $datetime_pinjam   = strtotime($tgl_pinjam . ' ' . $jam_pinjam);
@@ -40,8 +43,9 @@ if (isset($_POST['ajukan_peminjaman'])) {
             if ($data_stok['stok'] < $jumlah) {
                 echo "<script>alert('Stok alat tidak mencukupi! Tersedia: " . $data_stok['stok'] . " pcs, Diminta: " . $jumlah . " pcs');</script>";
             } else {
-                $query = "INSERT INTO peminjaman (id_user, id_alat, jumlah, tgl_pinjam, jam_kembali, tgl_kembali, status) 
-                          VALUES ('$id_user', '$id_alat', '$jumlah', '$tgl_pinjam', '$jam_kembali', '$tgl_kembali', 'menunggu')";
+                // Query INSERT dengan menyertakan kolom jam_pinjam dan variabel $jam_pinjam
+                $query = "INSERT INTO peminjaman (id_user, id_alat, jumlah, tgl_pinjam, jam_pinjam, jam_kembali, tgl_kembali, status) 
+                          VALUES ('$id_user', '$id_alat', '$jumlah', '$tgl_pinjam', '$jam_pinjam', '$jam_kembali', '$tgl_kembali', 'menunggu')";
                 
                 if (mysqli_query($conn, $query)) {
                     mysqli_commit($conn);
@@ -55,7 +59,7 @@ if (isset($_POST['ajukan_peminjaman'])) {
             echo "<script>alert('Terjadi kesalahan: " . $e->getMessage() . "');</script>";
         }
     }
-    }
+}
 ?>
 
 <!DOCTYPE html>
