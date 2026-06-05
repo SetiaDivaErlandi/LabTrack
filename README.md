@@ -1,173 +1,221 @@
-# 🔬 LabTrack (Proyek UAP)
+# 🧪 LabTrack (Proyek UAP)
 
-Proyek ini merupakan sistem manajemen dan peminjaman alat laboratorium terintegrasi yang dibangun menggunakan PHP dan MySQL. Tujuannya sebagai platform pelacakan inventaris dan pengajuan alat praktikum mahasiswa dengan memanfaatkan database transaction, view, trigger, dan backup database + task scheduler. Sistem ini juga dilengkapi mekanisme backup otomatis untuk menjaga keamanan data jika terjadi hal yang tidak diinginkan.
+LabTrack merupakan sistem manajemen peminjaman alat laboratorium yang dibangun menggunakan **PHP** dan **MySQL**. Sistem ini bertujuan untuk membantu pengelolaan data alat laboratorium, proses peminjaman, monitoring pengguna, serta pembuatan laporan peminjaman secara lebih terstruktur dan efisien.
 
-![Tampilan Fitur LabTrack](assets/img/screenshot_dashboard.png)
+Selain itu, sistem ini juga mengimplementasikan konsep **stored procedure, function, trigger, fragmentasi data, view**, serta **backup database otomatis menggunakan task scheduler** untuk menjaga integritas dan keamanan data.
 
----
+<img src="dashboard user.png">
+<img src="dashboard admin.png">
 
-## 📌 Detail Concept
+<h1>📌 Detail Konsep</h1>
 
-### 👥 Fragmentasi Data (Arsitektur View)
-Stored view bertindak sebagai lapisan abstraksi data relasional yang mengisolasi query kompleks dari kode aplikasi utama. Fragmentasi data dilakukan menggunakan SQL `VIEW` untuk menggabungkan data dari tabel `peminjaman`, `users`, dan `inventaris` secara horizontal dan vertikal.
+👣 **Stored Procedure** digunakan untuk mengelola proses utama pada sistem, seperti pengolahan data peminjaman dan validasi transaksi. Procedure disimpan langsung pada database untuk meningkatkan efisiensi, konsistensi, dan keamanan proses pada sistem multi-user.
 
-#### 🖼️ Struktur View di Database:
-![Bukti View](assets/img/screenshot_view.png)
+👣 **Function** digunakan untuk membantu proses validasi data, seperti pengecekan status alat atau kebutuhan tertentu sebelum transaksi dijalankan.
 
-#### 💻 Implementasi View (`view_laporan_peminjaman`):
-Fungsi ini menyatukan data laporan transaksi agar backend admin dapat memanggil ringkasan peminjaman secara instan tanpa membebani performa server dengan query `JOIN` yang berulang-ulang:
+👣 **Trigger** digunakan untuk menjaga konsistensi data secara otomatis, terutama pada proses peminjaman alat agar status inventaris selalu diperbarui sesuai kondisi transaksi.
+
+👣 **Fragmentasi Data** diterapkan pada pengelolaan inventaris untuk meningkatkan efisiensi akses data serta mendukung konsep basis data terdistribusi pada sistem.
+
+👣 **View** digunakan untuk menghasilkan laporan peminjaman sehingga proses monitoring data menjadi lebih mudah dan terstruktur.
+
+<img src="trigger.png">
+<img src="Routine.png">
+
+### Beberapa Procedure, Function, dan Trigger yang digunakan:
+
+`peminjaman.php`
+
+#### Stored Procedure
+
+`AddPeminjaman(p_mhs, p_alat, p_jml, p_kembali)`
+
+Procedure ini digunakan untuk menambahkan data peminjaman alat laboratorium ke dalam tabel `peminjaman`.
 
 ```sql
-CREATE VIEW `view_laporan_peminjaman` AS 
-SELECT 
-    `p`.`id_pinjam` AS `id_pinjam`, 
-    `p`.`id_user` AS `id_user`, 
-    `u`.`username` AS `nama_mahasiswa`, 
-    `i`.`nama_alat` AS `nama_alat`, 
-    `p`.`jumlah` AS `jumlah`, 
-    `p`.`tgl_pinjam` AS `tgl_pinjam`, 
-    `p`.`tgl_kembali` AS `tgl_kembali`, 
-    `p`.`jam_kembali` AS `jam_kembali`, 
-    `p`.`status` AS `status` 
-FROM ((`peminjaman` `p` 
-JOIN `users` `u` ON(`p`.`id_user` = `u`.`id_user`)) 
-JOIN `inventaris` `i` ON(`p`.`id_alat` = `i`.`id_alat`));
-🔒 Database Transaction & Race Condition Handling
-Pada file form_pinjam.php, aspek konsistensi data dijaga ketat menggunakan fitur Database Transaction (mysqli_begin_transaction). Hal ini dipadukan dengan klausa FOR UPDATE untuk mencegah fenomena Race Condition atau Double Booking ketika dua mahasiswa mencoba meminjam alat yang sama di detik yang sama.
-
-PHP
-mysqli_begin_transaction($conn);
-
-try {
-    // Mengunci baris data inventaris menggunakan FOR UPDATE untuk mencegah Race Condition
-    $cek_stok = mysqli_query($conn, "SELECT stok FROM inventaris WHERE id_alat = '$id_alat' FOR UPDATE");
-    $data_stok = mysqli_fetch_assoc($cek_stok);
-
-    if ($data_stok['stok'] < $jumlah) {
-        echo "<script>alert('Stok alat tidak mencukupi!');</script>";
-    } else {
-        // Eksekusi insert data ke tabel transaksi peminjaman
-        $query = "INSERT INTO peminjaman (id_user, id_alat, jumlah, tgl_pinjam, jam_pinjam, jam_kembali, tgl_kembali, status) 
-                  VALUES ('$id_user', '$id_alat', '$jumlah', '$tgl_pinjam', '$jam_pinjam', '$jam_kembali', '$tgl_kembali', 'menunggu')";
-        
-        if (mysqli_query($conn, $query)) {
-            // Jika semua operasi sukses, simpan perubahan secara permanen
-            mysqli_commit($conn);
-            echo "<script>alert('Peminjaman berhasil diajukan!'); window.location='riwayat.php';</script>";
-        } else {
-            throw new Exception("Gagal melakukan input data peminjaman.");
-        }
-    }
-} catch (Exception $e) {
-    // Jika di tengah jalan terjadi error, batalkan semua perubahan (Rollback) untuk menjaga integritas data
-    mysqli_rollback($conn);
-    echo "<script>alert('Terjadi kesalahan: " . $e->getMessage() . "');</script>";
-}
-FOR UPDATE : Memblokir akses read/write proses lain pada baris alat yang sedang diperiksa hingga transaksi selesai berjalan.
-
-mysqli_commit() : Menandakan bahwa seluruh rangkaian proses (pengecekan dan pengisian data) valid dan diaplikasikan ke database.
-
-mysqli_rollback() : Berfungsi mengembalikan database ke keadaan semula jika salah satu query gagal, menghindari adanya data transaksi yang menggantung.
-
-
-⚡ Database Triggers
-![Bukti Trigger](assets/img/screenshot_trigger.png)
-
-trigger_kelola_stok_alat : Trigger ini bertindak langsung di lapisan DBMS untuk mengotomatisasi sinkronisasi data kuantitas inventaris tanpa perlu menulis query UPDATE manual di dalam kode PHP script aplikasi:
-
-Kondisi dipinjam : Mengurangi kuantitas stok alat di tabel inventaris secara otomatis begitu admin mengubah status peminjaman mahasiswa menjadi disetujui.
-
-Kondisi kembali : Mengembalikan kuantitas stok alat ke tabel inventaris saat mahasiswa memulangkan alat laboratorium secara fisik.
-
-🖼️ Struktur Trigger di Database:
-SQL
 BEGIN
-    -- Logika otomatisasi pengurangan stok alat lab
+    INSERT INTO peminjaman (
+         nama_mahasiswa,
+        id_alat,
+        jumlah,
+        tgl_kembali,
+        status,
+        tgl_pinjam
+    )
+    VALUES (
+        p_mhs,
+        p_alat,
+        p_jml,
+        p_kembali,
+        'dipinjam',
+        NOW()
+    );
+END
+```
+
+#### Function
+
+`hitung_total_pinjam(p_id_user)`
+
+Function ini digunakan untuk menghitung total jumlah alat yang sedang dipinjam oleh pengguna tertentu.
+
+Function akan menjumlahkan data peminjaman dengan status `dipinjam` atau `terlambat`.
+
+```sql
+BEGIN
+    DECLARE total_barang INT DEFAULT 0;
+    
+    SELECT IFNULL(SUM(jumlah), 0)
+    INTO total_barang 
+    FROM peminjaman 
+    WHERE id_user = p_id_user
+    AND status IN ('dipinjam', 'terlambat');
+    
+    RETURN total_barang;
+END
+```
+
+#### Trigger
+
+`trg_update_status_inventaris`
+
+
+Trigger ini digunakan untuk menjaga konsistensi stok inventaris secara otomatis ketika alat laboratorium dikembalikan.
+
+Ketika status peminjaman berubah menjadi kembali, sistem akan secara otomatis menambahkan kembali jumlah stok alat pada tabel inventaris.
+
+Trigger hanya akan dijalankan apabila:
+
+* Status baru = kembali
+* Status sebelumnya ≠ kembali
+
+Hal ini bertujuan untuk mencegah duplikasi penambahan stok akibat perubahan data berulang.
+
+```sql
+BEGIN
+    -- Jika status berubah menjadi 'kembali', tambahkan stok alat
+    IF NEW.status = 'kembali' AND OLD.status != 'kembali' THEN
+        UPDATE inventaris 
+        SET stok = stok + NEW.jumlah 
+        WHERE id = NEW.id_alat;
+    END IF;
+END
+```
+`trigger_kelola_stok_alat`
+
+Trigger ini digunakan untuk mengelola stok inventaris alat laboratorium secara otomatis berdasarkan perubahan status peminjaman.
+
+Trigger akan:
+
+* Mengurangi stok alat ketika status berubah menjadi dipinjam
+* Menambahkan kembali stok alat ketika status berubah menjadi kembali
+
+Sistem hanya akan menjalankan perubahan stok apabila status benar-benar berubah, sehingga dapat mencegah duplikasi update data.
+
+```sql
+BEGIN
+    -- Mengurangi stok HANYA jika status berubah menjadi 'dipinjam' dan sebelumnya BUKAN 'dipinjam'
     IF NEW.status = 'dipinjam' AND OLD.status <> 'dipinjam' THEN
         UPDATE `inventaris` 
         SET `stok` = `stok` - NEW.jumlah
         WHERE `id_alat` = NEW.id_alat;
         
-    -- Logika otomatisasi pemulangan stok alat lab
+    -- Menambah stok HANYA jika status berubah menjadi 'kembali' dan sebelumnya BUKAN 'kembali'
     ELSEIF NEW.status = 'kembali' AND OLD.status <> 'kembali' THEN
         UPDATE `inventaris` 
         SET `stok` = `stok` + NEW.jumlah
         WHERE `id_alat` = NEW.id_alat;
     END IF;
 END
-💾 Backup Otomatis
+```
 
-![Bukti Task Scheduler](assets/img/screenshot_scheduler.png)
+## 📊 View Laporan Peminjaman
 
-Untuk menjaga ketersediaan (availability) dan keamanan data, sistem ini dilengkapi fitur backup otomatis berbasis skrip PHP native dan Windows Task Scheduler. Backup dilakukan secara berkala dan hasilnya disimpan dengan nama file yang mencakup komponen timestamp, sehingga mudah ditelusuri. Semua berkas cadangan disimpan di dalam direktori terlindung /backups dan status eksekusinya dicatat secara real-time pada file task_scheduler_log.txt.
+Sistem menggunakan `view_laporan_peminjaman` untuk mempermudah proses monitoring dan pelaporan data peminjaman alat laboratorium.
 
-🖼️ Tampilan Windows Task Scheduler:
-📄 cron_backup.php
-Skrip backend structured native yang bertugas membaca seluruh tabel operasional database (mengecualikan komponen virtual views) dan menyusun ulang struktur DDL (SHOW CREATE TABLE) serta query DML (INSERT INTO) ke dalam format file .sql:
+View ini digunakan untuk menampilkan data peminjaman secara lebih terstruktur melalui hasil penggabungan (*join*) beberapa tabel yang berkaitan, seperti:
 
-PHP
-<?php
-$host     = "localhost";
-$username = "root";
-$password = ""; 
-$dbname   = "labtrack";
+* Data mahasiswa/pengguna
+* Data inventaris alat laboratorium
+* Jumlah alat yang dipinjam
+* Status peminjaman
+* Tanggal peminjaman dan pengembalian
 
-$backup_dir = __DIR__ . '/backups/';
-if (!is_dir($backup_dir)) {
-    mkdir($backup_dir, 0777, true);
-}
+Dengan adanya *view*, proses pembuatan laporan menjadi lebih cepat, efisien, dan mengurangi kebutuhan penulisan query kompleks secara berulang.
 
-$file_name   = 'labtrack_auto_scheduled_' . date('Y-m-d_H-i-s') . '.sql';
-$backup_file = $backup_dir . $file_name;
+---
 
-$conn = mysqli_connect($host, $username, $password, $dbname);
-if (!$conn) {
-    file_put_contents(__DIR__ . '/task_scheduler_log.txt', "[" . date('Y-m-d H:i:s') . "] FAILED: Connection error.\n", FILE_APPEND);
-    exit();
-}
+## 💾 Backup Otomatis
 
-$tables = array();
-$result = mysqli_query($conn, "SHOW TABLES");
-while ($row = mysqli_fetch_row($result)) {
-    $tables[] = $row[0];
-}
+Untuk menjaga keamanan dan ketersediaan data, sistem dilengkapi fitur **backup database otomatis** menggunakan `mysqldump` dan **Windows Task Scheduler**.
 
-$sql_content = "-- LabTrack Database Automatic Scheduled Backup\n\n";
-foreach ($tables as $table) {
-    if (strpos($table, 'view_') === 0) continue;
-    $result = mysqli_query($conn, "SELECT * FROM $table");
-    $num_fields = mysqli_num_fields($result);
-    
-    $sql_content .= "DROP TABLE IF EXISTS `$table`;\n";
-    $row2 = mysqli_fetch_row(mysqli_query($conn, "SHOW CREATE TABLE $table"));
-    $sql_content .= $row2[1] . ";\n\n";
-    
-    for ($i = 0; $i < $num_fields; $i++) {
-        while ($row = mysqli_fetch_row($result)) {
-            $sql_content .= "INSERT INTO `$table` VALUES(";
-            for ($j = 0; $j < $num_fields; $j++) {
-                $row[$j] = addslashes($row[$j]);
-                if (isset($row[$j])) { $sql_content .= '"' . $row[$j] . '"'; } else { $sql_content .= 'NULL'; }
-                if ($j < ($num_fields - 1)) { $sql_content .= ','; }
-            }
-            $sql_content .= ");\n";
-        }
-    }
-    $sql_content .= "\n\n";
-}
+Backup dijalankan melalui file:
 
-file_put_contents($backup_file, $sql_content);
-file_put_contents(__DIR__ . '/task_scheduler_log.txt', "[" . date('Y-m-d H:i:s') . "] SUCCESS: " . $file_name . "\n", FILE_APPEND);
-echo "Success";
-?>
-📄 run.backup.bat
-Berkas batch Windows executable yang menjembatani otomasi CLI untuk mengarahkan interpreter PHP environment lokal agar dapat mengeksekusi skrip backup secara terjadwal:
+* `cron_backup.php`
+* `run.backup.bat`
 
-Cuplikan kode
-@echo off
+Hasil backup akan disimpan secara otomatis dengan nama file berdasarkan **timestamp**, sehingga memudahkan proses identifikasi dan pelacakan file cadangan database.
 
-cd /d "C:\xampp\php"
+Aktivitas backup juga dicatat pada file log:
 
-php.exe -f "C:\Users\Hype AMD\OneDrive\Documents\PDT_Projek\cron_backup.php"
+```bash
+task_scheduler_log.txt
+```
 
-exit
+Fitur ini bertujuan untuk mengantisipasi kehilangan data akibat kesalahan sistem, kerusakan database, maupun kegagalan perangkat.
+
+---
+
+## 🛠️ Teknologi yang Digunakan
+
+* **Frontend** : HTML, CSS, Bootstrap
+* **Backend** : PHP Native
+* **Database** : MySQL
+* **Server** : XAMPP/LARAGON
+* **Database Tools** : phpMyAdmin
+* **Code Editor** : Visual Studio Code
+
+---
+
+## 👥 Role Pengguna
+
+### Admin
+
+Admin memiliki akses penuh terhadap sistem, meliputi:
+
+* Mengelola data pengguna
+* Mengelola data inventaris alat laboratorium
+* Mengelola data peminjaman
+* Memantau laporan peminjaman
+* Menjalankan dan memonitor backup database
+
+### User / Mahasiswa
+
+Pengguna dapat melakukan aktivitas berikut:
+
+* Login ke sistem
+* Melakukan peminjaman alat laboratorium
+* Melihat status peminjaman alat
+
+---
+
+## 📂 Struktur Database
+
+Database LabTrack terdiri dari beberapa tabel utama:
+
+* `users`
+* `peminjaman`
+* `inventaris`
+
+Sistem juga menggunakan:
+
+* `view_laporan_peminjaman` untuk pelaporan data peminjaman
+
+Selain itu, sistem mengimplementasikan konsep:
+
+✅ Stored Procedure (`AddPeminjaman`)
+✅ Function (`hitung_total_pinjam`)
+✅ Trigger (`trigger_kelola_stok_alat`)
+✅ View Database
+✅ Fragmentasi Data pada Inventaris
+✅ Backup Database Otomatis menggunakan Task Scheduler
