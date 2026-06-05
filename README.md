@@ -4,8 +4,8 @@ LabTrack merupakan sistem manajemen peminjaman alat laboratorium yang dibangun m
 
 Selain itu, sistem ini juga mengimplementasikan konsep **stored procedure, function, trigger, fragmentasi data, view**, serta **backup database otomatis menggunakan task scheduler** untuk menjaga integritas dan keamanan data.
 
-<img src="dashboard user.png">
-<img src="dashboard admin.png">
+<img src="assets/img/dashboard user.png">
+<img src="assets/img/dashboard admin.png">
 
 <h1>📌 Detail Konsep</h1>
 
@@ -19,8 +19,8 @@ Selain itu, sistem ini juga mengimplementasikan konsep **stored procedure, funct
 
 👣 **View** digunakan untuk menghasilkan laporan peminjaman sehingga proses monitoring data menjadi lebih mudah dan terstruktur.
 
-<img src="trigger.png">
-<img src="Routine.png">
+<img src="assets/img/trigger.png">
+<img src="assets/img/Routine.png">
 
 ### Beberapa Procedure, Function, dan Trigger yang digunakan:
 
