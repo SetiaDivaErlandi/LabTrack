@@ -7,7 +7,6 @@ if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
     exit;
 }
 
-// Proses Tambah Alat Baru
 if (isset($_POST['tambah_alat'])) {
     $nama_alat = mysqli_real_escape_string($conn, $_POST['nama_alat']);
     $stok = mysqli_real_escape_string($conn, $_POST['stok']);
@@ -19,7 +18,6 @@ if (isset($_POST['tambah_alat'])) {
     }
 }
 
-// Proses Update Alat
 if (isset($_POST['update_alat'])) {
     $id_alat = mysqli_real_escape_string($conn, $_POST['id_alat']);
     $nama_alat = mysqli_real_escape_string($conn, $_POST['nama_alat']);
@@ -34,7 +32,6 @@ if (isset($_POST['update_alat'])) {
     }
 }
 
-// Proses Hapus Alat
 if (isset($_GET['hapus'])) {
     $id_hapus = mysqli_real_escape_string($conn, $_GET['hapus']);
     $q = "DELETE FROM inventaris WHERE id_alat = '$id_hapus'";
@@ -45,7 +42,6 @@ if (isset($_GET['hapus'])) {
     }
 }
 
-// Jika sedang mengedit, ambil data alat yang akan diedit
 $edit_item = null;
 if (isset($_GET['edit'])) {
     $id_edit = mysqli_real_escape_string($conn, $_GET['edit']);
@@ -55,7 +51,6 @@ if (isset($_GET['edit'])) {
     }
 }
 
-// Ambil data untuk ditampilkan ke tabel
 $katalog = mysqli_query($conn, "SELECT * FROM inventaris");
 ?>
 

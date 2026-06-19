@@ -1,10 +1,8 @@
 <?php
-// Script ini menonaktifkan akun yang tidak aktif selama X bulan.
-// Jalankan via cron (php scripts/auto_deactivate.php) atau panggil manual.
 
 include __DIR__ . '/../config/db.php';
 
-$months = 3; // ubah sesuai kebutuhan
+$months = 3; 
 
 if (isset($argv[1]) && is_numeric($argv[1])) {
     $months = intval($argv[1]);

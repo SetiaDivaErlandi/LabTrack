@@ -7,7 +7,6 @@ if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'mahasiswa') {
     exit;
 }
 
-// Ambil data katalog alat
 $katalog = mysqli_query($conn, "SELECT * FROM inventaris");
 ?>
 

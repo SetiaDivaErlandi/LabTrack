@@ -1,7 +1,7 @@
 <?php
-include 'config/db.php'; // Ditambahkan agar bisa mengecek database secara real-time
+include 'config/db.php';
 session_start();
-// Proteksi halaman: jika belum login, tendang ke index.php
+
 if (!isset($_SESSION['username'])) {
     header("Location: index.php");
     exit;
@@ -47,7 +47,6 @@ if (!isset($_SESSION['username'])) {
         date_default_timezone_set('Asia/Jakarta');
         $id_user_login = $_SESSION['id_user'] ?? 0;
 
-        // Mengecek melalui view laporan peminjaman
         $cek_terlambat_user = mysqli_query($conn, "SELECT tgl_kembali, jam_kembali, nama_alat 
                                                    FROM view_laporan_peminjaman 
                                                    WHERE id_user = '$id_user_login' AND status = 'dipinjam'");

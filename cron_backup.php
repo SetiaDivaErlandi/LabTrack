@@ -4,7 +4,6 @@ $username = "root";
 $password = ""; 
 $dbname   = "labtrack";
 
-// Tambahkan double underscore di depan dan di belakang DIR
 $backup_dir = __DIR__ . '/backups/';
 if (!is_dir($backup_dir)) {
     mkdir($backup_dir, 0777, true);

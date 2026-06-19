@@ -1,10 +1,8 @@
 <?php
 session_start();
 
-// 1. KONEKSI DATABASE LANGSUNG DI SINI
 include 'config/db.php';
 
-// Proteksi halaman: Pastikan user sudah login sebagai mahasiswa
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'mahasiswa') {
     header("Location: index.php");
     exit;
@@ -12,29 +10,22 @@ if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'mahasiswa') {
 
 $id_user = $_SESSION['id_user'];
 
-// 2. PROSES SIMPAN DATA FORMULIR
 if (isset($_POST['ajukan_peminjaman'])) {
     $id_alat      = mysqli_real_escape_string($conn, $_POST['id_alat']);
     $jumlah       = mysqli_real_escape_string($conn, $_POST['jumlah']);
-    $tgl_pinjam   = date('Y-m-d'); // Otomatis tanggal hari ini
-    $jam_pinjam   = date('H:i'); // Jam saat form disubmit
+    $tgl_pinjam   = date('Y-m-d');
+    $jam_pinjam   = date('H:i'); 
     $tgl_kembali  = mysqli_real_escape_string($conn, $_POST['tgl_kembali']);
     $jam_kembali  = mysqli_real_escape_string($conn, $_POST['jam_kembali']);
-
-    // ======== VALIDASI TANGGAL & JAM PENGEMBALIAN ========
-    // Gabungkan tanggal dan jam menjadi datetime untuk perbandingan
     $datetime_pinjam   = strtotime($tgl_pinjam . ' ' . $jam_pinjam);
     $datetime_kembali  = strtotime($tgl_kembali . ' ' . $jam_kembali);
     
-
-    // Validasi: Pengembalian tidak boleh sebelum waktu peminjaman
     if ($datetime_kembali < $datetime_pinjam) {
         echo "<script>alert('TANGGAL & JAM TIDAK VALID!\\n\\nAnda meminjam pada: " . date('d/m/Y H:i', $datetime_pinjam) . "\\n\\nTanggal pengembalian harus sama atau SETELAH waktu peminjaman.\\n\\nSilakan isi ulang data dengan benar.');</script>";
     } else {
         mysqli_begin_transaction($conn);
 
         try {
-            // Cek stok alat terlebih dahulu
             $cek_stok = mysqli_query($conn, "SELECT stok FROM inventaris WHERE id_alat = '$id_alat' FOR UPDATE");
             if (!$cek_stok) {
                 throw new Exception("Error cek stok: " . mysqli_error($conn));
@@ -42,7 +33,6 @@ if (isset($_POST['ajukan_peminjaman'])) {
             
             $data_stok = mysqli_fetch_assoc($cek_stok);
 
-            // Validasi: Jumlah tidak boleh melebihi stok dan harus positif
             if ($jumlah < 1 || !is_numeric($jumlah)) {
                 throw new Exception("Jumlah peminjaman harus minimal 1 unit!");
             }
@@ -50,12 +40,10 @@ if (isset($_POST['ajukan_peminjaman'])) {
             if ($data_stok['stok'] < $jumlah) {
                 echo "<script>alert('Stok alat tidak mencukupi! Tersedia: " . $data_stok['stok'] . " pcs, Diminta: " . $jumlah . " pcs');</script>";
             } else {
-                // Memasukkan data sesuai urutan kolom tabel peminjaman kamu
                 $query = "INSERT INTO peminjaman (id_user, id_alat, jumlah, tgl_pinjam, jam_kembali, tgl_kembali, status) 
                           VALUES ('$id_user', '$id_alat', '$jumlah', '$tgl_pinjam', '$jam_kembali', '$tgl_kembali', 'menunggu')";
                 
                 if (mysqli_query($conn, $query)) {
-                    // Stok akan dikurangi otomatis saat admin menyetujui peminjaman di kelola.php
                     mysqli_commit($conn);
                     echo "<script>alert('Peminjaman berhasil diajukan! Menunggu persetujuan admin.'); window.location='riwayat.php';</script>";
                 } else {
@@ -142,19 +130,17 @@ if (isset($_POST['ajukan_peminjaman'])) {
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Data stok untuk setiap alat
     const selectAlat = document.getElementById('id_alat');
     const inputJumlah = document.getElementById('jumlah');
     const textMaxStok = document.getElementById('maxStok');
 
-    // Update max dan info stok saat pilihan alat berubah
     selectAlat.addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
         const stok = selectedOption.getAttribute('data-stok');
 
         if (stok) {
             inputJumlah.setAttribute('max', stok);
-            inputJumlah.value = ''; // Reset input
+            inputJumlah.value = ''; 
             textMaxStok.textContent = 'Maksimal dapat dipinjam: ' + stok + ' pcs';
         } else {
             inputJumlah.removeAttribute('max');
@@ -163,16 +149,13 @@ if (isset($_POST['ajukan_peminjaman'])) {
         }
     });
 
-    // Set minimum date = hari ini
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('tgl_kembali').setAttribute('min', today);
 
-    // Set default jam = jam sekarang
     const now = new Date();
     const currentTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
     document.getElementById('jam_kembali').value = currentTime;
-
-    // Validasi saat user submit form
+    
     document.querySelector('form').addEventListener('submit', function(e) {
         const idAlat = document.getElementById('id_alat').value;
         const jumlah = parseInt(inputJumlah.value);
@@ -181,21 +164,18 @@ if (isset($_POST['ajukan_peminjaman'])) {
         const selectedOption = selectAlat.options[selectAlat.selectedIndex];
         const maxStok = parseInt(selectedOption.getAttribute('data-stok'));
 
-        // Validasi alat dipilih
         if (!idAlat) {
             e.preventDefault();
             alert('Silakan pilih alat terlebih dahulu!');
             return false;
         }
 
-        // Validasi jumlah
         if (!jumlah || jumlah < 1) {
             e.preventDefault();
             alert('Silakan isi jumlah peminjaman (minimal 1)!');
             return false;
         }
 
-        // Validasi jumlah tidak lebih dari stok
         if (jumlah > maxStok) {
             e.preventDefault();
             alert('Jumlah peminjaman tidak boleh lebih dari stok tersedia! Maksimal: ' + maxStok + ' pcs');
@@ -208,21 +188,18 @@ if (isset($_POST['ajukan_peminjaman'])) {
             return false;
         }
 
-        // Cek apakah tanggal pengembalian tidak lebih awal dari hari ini
         if (tglKembali < today) {
             e.preventDefault();
             alert('Tanggal pengembalian tidak boleh di hari sebelumnya!');
             return false;
         }
 
-        // Jika tanggal sama dengan hari ini, jam harus >= jam sekarang
         if (tglKembali === today && jamKembali < currentTime) {
             e.preventDefault();
             alert('Jika pengembalian hari ini, jam harus sama atau LEBIH BESAR dari jam sekarang (' + currentTime + ')');
             return false;
         }
 
-        // Jika semua validasi lolos
         return true;
     });
 </script>

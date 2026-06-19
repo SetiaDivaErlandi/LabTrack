@@ -2,7 +2,6 @@
 include 'config/db.php';
 session_start();
 
-// Jika sudah login, redirect ke dashboard
 if (isset($_SESSION['username'])) {
     header("Location: dashboard.php");
     exit;
@@ -10,14 +9,12 @@ if (isset($_SESSION['username'])) {
 
 $error = '';
 
-// Jika user submit token
 if (isset($_POST['submit_token'])) {
     $token = mysqli_real_escape_string($conn, trim($_POST['token']));
     
     if (empty($token)) {
         $error = "Silakan masukkan token!";
     } else {
-        // Cek token valid
         $query = "SELECT id_user, reset_token_expiry FROM users WHERE reset_token = '$token'";
         $result = mysqli_query($conn, $query);
         
@@ -26,9 +23,7 @@ if (isset($_POST['submit_token'])) {
             $expiry_timestamp = strtotime($user['reset_token_expiry']);
             $current_timestamp = time();
             
-            // Toleransi 10 menit tambahan untuk timezone issues dan delay
             if ($expiry_timestamp > ($current_timestamp - 600)) {
-                // Token valid, redirect ke reset_password dengan token di URL
                 header("Location: reset_password.php?token=" . urlencode($token));
                 exit;
             } else {

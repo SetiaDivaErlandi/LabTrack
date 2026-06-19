@@ -2,7 +2,6 @@
 include 'config/db.php';
 session_start();
 
-// Set timezone agar sinkron dengan input mahasiswa
 date_default_timezone_set('Asia/Jakarta');
 
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'mahasiswa') {
@@ -12,7 +11,6 @@ if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'mahasiswa') {
 
 $id_user = $_SESSION['id_user'];
 
-// Ambil riwayat peminjaman user ini
 $query_riwayat = "SELECT p.id_pinjam, p.id_user, p.id_alat, p.jumlah, p.tgl_pinjam, p.jam_kembali, p.tgl_kembali, p.status, i.nama_alat FROM peminjaman p 
                   JOIN inventaris i ON p.id_alat = i.id_alat 
                   WHERE p.id_user = '$id_user' 
@@ -41,7 +39,6 @@ $riwayat = mysqli_query($conn, $query_riwayat);
 <div class="container my-5">
 
     <?php 
-    // Ambil ulang data khusus status dipinjam untuk mendeteksi keterlambatan di atas tabel
     $cek_terlambat_riwayat = mysqli_query($conn, "SELECT tgl_kembali, jam_kembali, nama_alat 
                                                FROM peminjaman 
                                                JOIN inventaris ON peminjaman.id_alat = inventaris.id_alat
@@ -87,58 +84,44 @@ $riwayat = mysqli_query($conn, $query_riwayat);
         <p class="text-muted small mb-4">Pantau status persetujuan dari admin laboratorium secara berkala di bawah ini.</p>
 
         <div class="table-responsive">
-            <table class="table table-bordered align-middle text-center">
-                <thead class="table-secondary small fw-bold text-uppercase">
+            <table class="table table-bordered">
+                <thead>
                     <tr>
-                        <th>No</th>
-                        <th>Alat yang Diajukan</th>
-                        <th>Jumlah</th>
-                        <th>Tanggal Pinjam</th>
-                        <th>Batas Pengembalian</th>
-                        <th>Status Validasi</th>
+                        <th>NO</th>
+                        <th>ALAT YANG DIAJUKAN</th>
+                        <th>JUMLAH</th>
+                        <th>TGL PINJAM</th>
+                        <th>JAM PINJAM</th> 
+                        <th>TGL KEMBALI</th>
+                        <th>JAM KEMBALI</th>
+                        <th>STATUS VALIDASI</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if(mysqli_num_rows($riwayat) > 0): ?>
-                        <?php $no = 1; while($row = mysqli_fetch_assoc($riwayat)): ?>
-                        <tr>
-                            <td><?php echo $no++; ?></td>
-                            <td class="text-start fw-bold text-secondary"><?php echo $row['nama_alat']; ?></td>
-                            <td><?php echo $row['jumlah']; ?> Pcs</td>
-                            <td><?php echo date('d-m-Y', strtotime($row['tgl_pinjam'])); ?></td>
-                            <td><?php echo date('d-m-Y', strtotime($row['tgl_kembali'])) . ' ' . date('H:i', strtotime($row['jam_kembali'] ?? '00:00')); ?></td>
-                            <td>
-                                <?php 
-                                $waktu_sekarang = time();
-                                $string_waktu_kembali = $row['tgl_kembali'] . ' ' . ($row['jam_kembali'] ?? '00:00:00');
-                                $waktu_kembali = strtotime($string_waktu_kembali);
-
-                                // Tentukan status yang akan ditampilkan
-                                $status_tampil = $row['status'];
-                                if ($row['status'] == 'dipinjam' && $waktu_sekarang > $waktu_kembali) {
-                                    $status_tampil = 'terlambat_dihitung';
-                                }
-
-                                if ($status_tampil == 'terlambat_dihitung') {
-                                    echo '<span class="badge bg-danger py-2 px-3 fw-semibold">Terlambat</span>';
-                                } elseif($status_tampil == 'menunggu') {
-                                    echo '<span class="badge bg-warning text-dark py-2 px-3 fw-semibold">Menunggu Admin</span>';
-                                } elseif($status_tampil == 'dipinjam') {
-                                    echo '<span class="badge bg-primary py-2 px-3 fw-semibold">Sedang Dipinjam</span>';
-                                } elseif($status_tampil == 'kembali') {
-                                    echo '<span class="badge bg-success py-2 px-3 fw-semibold">Sudah Kembali</span>';
-                                } else {
-                                    echo '<span class="badge bg-secondary py-2 px-3 fw-semibold">Status Tidak Dikenal</span>';
-                                }
-                                ?>
-                            </td>
-                        </tr>
-                        <?php endwhile; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">Kamu belum pernah membuat pengajuan peminjaman alat apa pun.</td>
-                        </tr>
-                    <?php endif; ?>
+                    <?php
+                    $no = 1;
+                    $query = "SELECT * FROM peminjaman WHERE id_user = '$_SESSION[id_user]'"; 
+                    $result = mysqli_query($conn, $query);
+                    
+                    while($row = mysqli_fetch_assoc($result)) {
+                        $jam_pinjam = date('H:i', strtotime($row['jam_pinjam']));
+                        $jam_kembali = date('H:i', strtotime($row['jam_kembali']));
+                        
+                        $badge_class = ($row['status'] == 'kembali') ? 'bg-success' : 'bg-warning';
+                        
+                        echo "<tr>
+                                <td>{$no}</td>
+                                <td>{$row['id_alat']}</td>
+                                <td>{$row['jumlah']} Pcs</td>
+                                <td>{$row['tgl_pinjam']}</td>
+                                <td>{$jam_pinjam}</td> 
+                                <td>{$row['tgl_kembali']}</td>
+                                <td>{$jam_kembali}</td>
+                                <td><span class='badge {$badge_class}'>{$row['status']}</span></td>
+                            </tr>";
+                        $no++;
+                    }
+                    ?>
                 </tbody>
             </table>
         </div>

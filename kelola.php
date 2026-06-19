@@ -2,62 +2,46 @@
 include 'config/db.php';
 session_start();
 
-// Set timezone agar fungsi time() dan strtotime() akurat dengan waktu lokal (WIB)
 date_default_timezone_set('Asia/Jakarta');
 
-// Proteksi halaman: Hanya Admin yang boleh masuk
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
     exit;
 }
 
-// ============================================================================================
-// IMPLEMENTASI MATERI CONCURRENCY CONTROL & PENCEGAHAN DEADLOCK (MODUL 4)
-// Menggunakan Metode Pessimistic Locking (FOR UPDATE) & Database Transaction
-// ============================================================================================
 if (isset($_GET['action']) && isset($_GET['id'])) {
     $id_pinjam = mysqli_real_escape_string($conn, $_GET['id']);
     $action = $_GET['action'];
 
     if ($action == 'setujui') {
-        // 1. Memulai Transaksi Database (Menerapkan prinsip Atomicity & Isolation)
         mysqli_begin_transaction($conn);
 
         try {
-            // 2. KUNCI BARIS DATA (Row-Level Lock) dengan FOR UPDATE untuk mencegah Deadlock / Race Condition
             $check_lock = mysqli_query($conn, "SELECT status FROM peminjaman WHERE id_pinjam = '$id_pinjam' FOR UPDATE");
             $status_skrg = mysqli_fetch_assoc($check_lock);
 
-            // 3. Validasi kondisi data sebelum melakukan manipulasi
             if ($status_skrg['status'] === 'menunggu') {
-                // Hanya update status - TRIGGER database akan otomatis kurangi stok secara aman
                 $query = "UPDATE peminjaman SET status = 'dipinjam' WHERE id_pinjam = '$id_pinjam'";
                 mysqli_query($conn, $query);
                 
-                // Jika sukses, kunci dilepaskan dan data disimpan permanen
                 mysqli_commit($conn);
                 $success = "✓ Pengajuan berhasil disetujui! Stok alat otomatis berkurang melalui TRIGGER database secara aman (Anti-Deadlock).";
             } else {
                 throw new Exception("Transaksi ini sudah diproses atau divalidasi sebelumnya.");
             }
         } catch (Exception $e) {
-            // Jika terjadi kegagalan, batalkan semua perubahan agar data tetap konsisten
             mysqli_rollback($conn);
             $error = "Terjadi kesalahan sistem (Concurrency Blocked): " . $e->getMessage();
         }
 
     } elseif ($action == 'kembali') {
-        // Memulai Transaksi untuk proses pengembalian barang
         mysqli_begin_transaction($conn);
 
         try {
-            // Mengunci data baris peminjaman sebelum diubah statusnya menjadi 'kembali'
             $check_lock = mysqli_query($conn, "SELECT status FROM peminjaman WHERE id_pinjam = '$id_pinjam' FOR UPDATE");
             $status_skrg = mysqli_fetch_assoc($check_lock);
 
-            // Admin bisa memproses pengembalian baik status aslinya 'dipinjam' atau secara fisik sudah lewat tenggat
             if ($status_skrg['status'] === 'dipinjam') {
-                // Hanya update status - TRIGGER database akan otomatis tambah stok kembali
                 $query = "UPDATE peminjaman SET status = 'kembali' WHERE id_pinjam = '$id_pinjam'";
                 mysqli_query($conn, $query);
                 
@@ -73,9 +57,6 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
     }
 }
 
-// ============================================================================================
-// IMPLEMENTASI MATERI: MENGGUNAKAN VIEW & STORED FUNCTION DATABASE
-// ============================================================================================
 $query_request = "SELECT *, hitung_total_pinjam(id_user) as total_aktif FROM view_laporan_peminjaman ORDER BY id_pinjam DESC";
 $requests = mysqli_query($conn, $query_request);
 ?>
@@ -108,40 +89,46 @@ $requests = mysqli_query($conn, $query_request);
 
         <div class="table-responsive">
             <table class="table table-bordered align-middle text-center">
-                <thead class="table-dark small text-uppercase">
+                <thead>
                     <tr>
-                        <th>Mahasiswa</th>
-                        <th>Alat Praktikum</th>
-                        <th>Jumlah</th>
-                        <th>Batas Kembali</th>
-                        <th>Total Pinjam Aktif (Function)</th>
-                        <th>Status Saat Ini</th>
-                        <th>Aksi Admin</th>
+                        <th>MAHASISWA</th>
+                        <th>ALAT PRAKTIKUM</th>
+                        <th>JUMLAH</th>
+                        <th>TGL PINJAM</th>     
+                        <th>JAM PINJAM</th>   
+                        <th>TGL KEMBALI</th>  
+                        <th>JAM KEMBALI</th>  
+                        <th>TOTAL PINJAM</th>
+                        <th>STATUS</th>
+                        <th>AKSI</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if(mysqli_num_rows($requests) > 0): ?>
-                        <?php while($row = mysqli_fetch_assoc($requests)): ?>
+                        <?php while($row = mysqli_fetch_assoc($requests)): 
+                            $tgl_pinjam = date('d-m-Y', strtotime($row['tgl_pinjam']));
+                            $jam_pinjam = date('H:i', strtotime($row['tgl_pinjam']));
+                            
+                            $tgl_kembali = date('d-m-Y', strtotime($row['tgl_kembali']));
+                            $jam_kembali = !empty($row['jam_kembali']) ? date('H:i', strtotime($row['jam_kembali'])) : '00:00';
+                        ?>
                         <tr>
                             <td class="fw-bold text-dark"><?php echo $row['nama_mahasiswa']; ?></td>
                             <td class="text-start"><?php echo $row['nama_alat']; ?></td>
                             <td><?php echo $row['jumlah']; ?> Pcs</td>
                             
-                            <td>
-                                <?php 
-                                    $jam_data = !empty($row['jam_kembali']) ? $row['jam_kembali'] : '00:00:00';
-                                    echo date('d-m-Y', strtotime($row['tgl_kembali'])) . ' ' . date('H:i', strtotime($jam_data)); 
-                                ?>
-                            </td>
+                            <td><?php echo $tgl_pinjam; ?></td>
+                            <td><?php echo $jam_pinjam; ?></td>
+                            
+                            <td><?php echo $tgl_kembali; ?></td>
+                            <td><?php echo $jam_kembali; ?></td>
                             
                             <td><span class="badge bg-dark"><?php echo $row['total_aktif']; ?> Item Aktif</span></td>
                             
                             <td>
                                 <?php 
-                                // Logika Deteksi Terlambat Real-time
                                 $waktu_sekarang = time();
-                                $jam_format = !empty($row['jam_kembali']) ? $row['jam_kembali'] : '00:00:00';
-                                $string_waktu_kembali = $row['tgl_kembali'] . ' ' . $jam_format;
+                                $string_waktu_kembali = $row['tgl_kembali'] . ' ' . (!empty($row['jam_kembali']) ? $row['jam_kembali'] : '00:00:00');
                                 $waktu_kembali = strtotime($string_waktu_kembali);
                                 
                                 $status_tampil = $row['status'];
@@ -163,10 +150,7 @@ $requests = mysqli_query($conn, $query_request);
                                 ?>
                             </td>
                             <td>
-                                <?php 
-                                // PERBAIKAN LOGIKA: Sinkronisasi status_tampil agar tombol Selesai tetap aktif saat Terlambat
-                                if($status_tampil == 'menunggu'): 
-                                ?>
+                                <?php if($status_tampil == 'menunggu'): ?>
                                     <a href="kelola.php?action=setujui&id=<?php echo $row['id_pinjam']; ?>" class="btn btn-sm btn-success fw-bold px-2" onclick="return confirm('Setujui peminjaman ini?')">Setujui</a>
                                 <?php elseif($status_tampil == 'dipinjam' || $status_tampil == 'terlambat_dihitung'): ?>
                                     <a href="kelola.php?action=kembali&id=<?php echo $row['id_pinjam']; ?>" class="btn btn-sm btn-info text-white fw-bold px-2" onclick="return confirm('Selesaikan peminjaman?')">Selesai</a>
@@ -178,7 +162,7 @@ $requests = mysqli_query($conn, $query_request);
                         <?php endwhile; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="7" class="text-center py-4 text-muted">Belum ada riwayat transaksi pengajuan.</td>
+                            <td colspan="10" class="text-center py-4 text-muted">Belum ada riwayat transaksi pengajuan.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>

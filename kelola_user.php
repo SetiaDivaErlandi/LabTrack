@@ -2,24 +2,20 @@
 include 'config/db.php';
 session_start();
 
-// Keamanan: Hanya Admin yang boleh masuk ke halaman ini
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
     exit;
 }
 
-// Proses Hapus Akun Mahasiswa
 if (isset($_GET['hapus'])) {
     $id_user = mysqli_real_escape_string($conn, $_GET['hapus']);
     
-    // Pastikan admin tidak bisa menghapus sesama admin
     $query_hapus = "DELETE FROM users WHERE id_user = '$id_user' AND role != 'admin'";
     if (mysqli_query($conn, $query_hapus)) {
         $success = "Akun mahasiswa berhasil dihapus dari sistem.";
     }
 }
 
-// Proses Toggle Status (aktif / nonaktif)
 if (isset($_GET['toggle']) && isset($_GET['to'])) {
     $id_toggle = mysqli_real_escape_string($conn, $_GET['toggle']);
     $to = mysqli_real_escape_string($conn, $_GET['to']);
@@ -33,7 +29,6 @@ if (isset($_GET['toggle']) && isset($_GET['to'])) {
     }
 }
 
-// Proses Approve Reactivate Request
 if (isset($_GET['approve_reactivate'])) {
     $id_approve = mysqli_real_escape_string($conn, $_GET['approve_reactivate']);
     $q = "UPDATE users SET status = 'aktif', reactivate_requested = 0, last_active = NOW() WHERE id_user = '$id_approve' AND role != 'admin'";
@@ -44,7 +39,6 @@ if (isset($_GET['approve_reactivate'])) {
     }
 }
 
-// Proses Reject Reactivate Request
 if (isset($_GET['reject_reactivate'])) {
     $id_reject = mysqli_real_escape_string($conn, $_GET['reject_reactivate']);
     $q = "UPDATE users SET reactivate_requested = 0 WHERE id_user = '$id_reject' AND role != 'admin'";
@@ -55,7 +49,6 @@ if (isset($_GET['reject_reactivate'])) {
     }
 }
 
-// Ambil semua data user yang rolenya BUKAN admin (berarti mahasiswa/user biasa)
 $users_query = mysqli_query($conn, "SELECT id_user, username, role, COALESCE(status,'aktif') AS status, last_active FROM users WHERE role != 'admin'");
 ?>
 

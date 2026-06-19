@@ -10,7 +10,6 @@ if (!isset($_SESSION['username'])) {
 $id_user = $_SESSION['id_user'];
 
 if (isset($_GET['action']) && $_GET['action'] === 'deactivate') {
-    // Set status to nonaktif dan destroy session
     mysqli_query($conn, "UPDATE users SET status = 'nonaktif' WHERE id_user = '$id_user'");
     session_unset();
     session_destroy();
@@ -18,7 +17,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'deactivate') {
     exit;
 }
 
-// Simple page with button
 ?>
 
 <!DOCTYPE html>
@@ -27,7 +25,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'deactivate') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelola Akun Saya - LabTrack</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https:cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container mt-5">

@@ -2,7 +2,6 @@
 include 'config/db.php';
 session_start();
 
-// Jika sudah login, redirect ke dashboard
 if (isset($_SESSION['username'])) {
     header("Location: dashboard.php");
     exit;
@@ -12,16 +11,13 @@ if (isset($_POST['request_reactivate'])) {
     $username = mysqli_real_escape_string($conn, $_POST['username']);
     $password = mysqli_real_escape_string($conn, $_POST['password']);
 
-    // Cari user dengan username dan password yang cocok
     $query = "SELECT * FROM users WHERE username = '$username' AND password = '$password'";
     $result = mysqli_query($conn, $query);
 
     if (mysqli_num_rows($result) === 1) {
         $row = mysqli_fetch_assoc($result);
         
-        // Cek apakah user ini nonaktif
         if ($row['status'] === 'nonaktif') {
-            // Update flag reactivate_requested
             mysqli_query($conn, "UPDATE users SET reactivate_requested = 1 WHERE id_user = '".$row['id_user']."'");
             $success = "Permintaan aktivasi akun Anda telah dikirim ke admin. Silakan tunggu persetujuan admin.";
         } else if ($row['status'] === 'aktif') {

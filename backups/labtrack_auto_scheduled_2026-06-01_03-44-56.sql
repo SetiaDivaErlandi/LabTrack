@@ -1,5 +1,3 @@
--- LabTrack Database Automatic Scheduled Backup
-
 DROP TABLE IF EXISTS `inventaris`;
 CREATE TABLE `inventaris` (
   `id_alat` int NOT NULL AUTO_INCREMENT,
